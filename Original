@@ -1,0 +1,998 @@
+/*
+	Program: Tetris
+	Author: Mel Richards
+	Create Date: 01.16.2017
+	Updated Date: 03.15.2017
+	Description: This is the game of Tetris. After starting the game, the user moves one of seven randomly chosen shapes into place on a game board. As the shape falls, it can be moved left or right. Once th shape is in place, 
+				 the game checks to see if all fields of the board in a horizontal line have been filled. If they have been, they are cleared and all shapes on the game board are moved down. The player would then score points. 
+				 the points structure for this game will be: 
+				 - 1 line = 100 points * level
+				 - 2 lines = 300 points * level
+				 - 3 lines = 500 points * level
+				 - 4 lines (Tetris) = 800 points * level
+				 Level  at (10000 * level) - Game ends at level 50
+				 After checking to see if points are scored, the final score and end of game message will be displayed if the next tetrimino can't be moved down a space. If the game is not over, a loop will cause it to 
+				 repeat so that a new random shape is dropped. 
+*/
+
+
+#include "stdafx.h"
+#include <iostream>
+#include <ctime>
+#include <cstdlib>
+#include "windows.h"
+#include <conio.h>
+
+using namespace std;
+
+
+/*Declare the functions for the program. The function pickShape chooses a random number, 1-7 and uses the number to determine which shape is dropped. This is used to determine which game shape will be dropped. The moveShapeDown
+bool function will determine if the shape can move down by one space. If the shape can move down by one, moveOK remains true and the dropShape function will drop the shape down one space. The moveShapePlayer
+function is called when the player gives input for the game. The checkBoard function checks the game board to see if points can be scored. If they can, the function totals points and increases playerLevel. 
+*/
+
+int playTetris(int start);
+char pickShape();
+void dropNewShape(char currentShape, int &lColumn, int &rColumn, int &tRow);
+void displayBucket(char currentShape, int color);
+bool moveShape(bool moveOK, int sRow, bool& gameOver, char input, int rColumn, int lColumn, int tRow);
+void dropShape(int sRow, int lColumn, int rColumn, int tRow);
+void shapeRight(int sRow, int lColumn, int rColumn, int tRow);
+void shapeLeft(int sRow, int lColumn, int rColumn, int tRow);
+int rotateShape(int &sRow, int &lColumn, int &rColumn, int &tRow, char currentShape, int rotated);
+void checkBoard(int& playerLevel, int& points, char currentShape, int color);
+void setColor(int color);
+
+//Declare the bucket as a global array. Declare global constants for Rows and columns. Declare the colorArray to store the shape colors as the game progresses. 
+const int COLUMNS = 12;
+const int ROWS = 25;
+char bucketArray[ROWS][COLUMNS];
+int colorArray[ROWS][COLUMNS];
+
+int main()
+{
+	//Declare the variables for the main function. The start variable is used to start or exit the game
+	int start = 3;
+
+	//Seed the random number generator
+	srand(static_cast<unsigned int>(time(0)));
+
+	//Welcome the user to the game and display the game start menu. 
+	cout << "-------------------------------------------------------------------------------\r\n";
+	cout << "|\t\t\t\tTetris\t\t\t\t\t      |\r\n";
+	cout << "-------------------------------------------------------------------------------\r\n";
+	cout << "\nWelcome to the game of Tetris!\r\n";
+
+	//While start does not equal 1 or 0 display the start menu on the screen. Get the player's input and display an error if start is not 1 or 2. The while loop runs the game multiple times. 
+	while (start != 1 && start != 0)
+	{
+		cout << "What would you like to do ? \r\n";
+		cout << "\n1 - Start the Game\r\n";
+		cout << "0 - Exit the Game\r\n\n";
+		cout << "Choice:";
+		cin >> start; 
+		if (cin.fail())
+		{
+			cout << "\nYou must enter a number. Please try again\r\n\n";
+			cin.clear();
+			cin.ignore(256, '\n');
+
+		}
+		else if (start != 1 && start != 0)
+		{
+			cout << "\nYou must enter 1 or 0. Please try again\r\n\n";
+		}
+
+		//A case structure determines what the happens based on user input. If the user has imput 1 into the start variable, playTetrisis called and Tetris begins. If they have input a 0, the progam exits. 
+		switch (start)
+		{
+		case 1:
+			start = playTetris(start);
+		default:
+			break;
+		}
+	}	
+	system("pause");
+    return 0;
+}
+
+int playTetris(int start)
+{
+	//Declare the variables for the function. gameOver runs the game until the player has lost or reached level 50. playerLevel holds the player's level in the game. input is the char that determines if the pice moves, turns, or
+	//drops. rotated is an int used in the rotateShape function to help determine how the bucetArray will be updated. 
+	bool gameOver = false;
+	int playerLevel = 0, points = 0, rotated, sRow, rColumn, lColumn, tRow, count = 0;
+	char input = ' ';
+	
+	//Fill the game board bucketArray to start the game. 
+	for (int r = 0; r < 3; r++)
+	{
+		for (int c = 0; c < COLUMNS; c++)
+		{
+			bucketArray[r][c] = ' ';
+		}
+	}
+
+	for (int r = 4; r < ROWS; r++)
+	{
+		for (int c = 0; c < COLUMNS; c++)
+		{
+			if (c == 0 || c == 11)
+			{
+				bucketArray[r][c] = '|';
+			}
+			else if (r == 24)
+			{
+				bucketArray[r][c] = '=';
+			}
+			else
+			{
+				bucketArray[r][c] = ' ';
+			}
+		}
+	}
+
+	//Fill the color array with 0s to begin the game. 
+	for (int r = 0; r < ROWS; r++)
+	{
+		for (int c = 0; c < COLUMNS; c++)
+		{
+			colorArray[r][c] = 7;
+		}
+	}
+
+	//Tell the player the rules of the game. Let them know how to move pieces on the game board. Explain what each of the movement options do. 
+	cout << "\r\n";
+	cout << "-------------------------------------------------------------------------------\r\n";
+	cout << "|\t\t\t\tTetris Rules\t\t\t\t      |\r\n";
+	cout << "-------------------------------------------------------------------------------\r\n";
+	cout << "\nUse the a, d, and s keys to move the shapes on the screen. The w key rotates\r\nthe piece.\r\n\n";
+	cout << "s - Moves the piece three spaces down\r\n";
+	cout << "a - Moves the piece one space left\r\n";
+	cout << "d - Moves the piece one space right\r\n";
+	cout << "w - Rotates the piece\r\n";
+
+	cout << "\nThe game ends when you reach level 50 or when the tetriminos are overflowing on\r\nthe game board.\r\n\n";
+
+	system("pause");
+
+	cout << "\r\n";
+	cout << "-------------------------------------------------------------------------------\r\n";
+	cout << "|\t\t\t\tLet's Play!\t\t\t\t      |\r\n";
+	cout << "-------------------------------------------------------------------------------\r\n";
+
+	//Use a while loop to run the program until gameOver = true. 
+	while (gameOver != true && playerLevel < 50)
+	{
+		//Call the pickShape function to randomly pick the shape to drop. Declare the sRow variable. This variable tracks the row of the bottom-most section of the tetrimino poece. It's essential to checking whether or not a 
+		//piece is able to move down later in the game. Set moveOk to true so it can be used to run the loop and drop the shape. Declare the color variable that is used to determine which color is for the shape. 
+		char currentShape = pickShape();
+		bool moveOK = true;
+		int color = 0;
+
+		//The initial shape will be an 'L' in every situation. 
+		if (count == 0)
+		{
+			currentShape = 'L';
+		}
+		count++;
+
+		rotated = 1;
+		sRow = 3;
+		rColumn = 0;
+		lColumn = 0; 
+		tRow = 0;
+
+		//Initilize the game board bucket by calling the initilize bucket function. 
+		dropNewShape(currentShape, lColumn, rColumn, tRow);
+
+		//Use a switch statement to determine which color is needed based on the current shape. 
+		switch (currentShape)
+		{
+		case 'J':
+			color = 1;
+			break;
+		case 'I':
+			color = 2;
+			break;
+		case 'O':
+			color = 3;
+			break;
+		case 'L':
+			color = 4;
+			break;
+		case 'S':
+			color = 5;
+			break;
+		case 'T':
+			color = 6;
+			break;
+		case 'Z':
+			color = 13;
+			break;
+		default:
+			break;
+		}
+
+		//Display the bucket and then sleep the program to slow down the process of running the loop. The shape drops a few spaces before the player is able to put in input.  
+		displayBucket(currentShape, color);
+		Sleep(500);
+		
+		//A do while loop displays the bucket and then checks to see if the shape can move down. If it can, it drops the shape. The loop runs while moveOk is true.
+		do
+		{
+			//check for user input. If the user has entered a left arrow key, right arrow key, or down arrow key, the moveShapePlayer function is called to move the shape in the appropriate way. if there is no user input, the 
+			//tetrimino will move down if it can.
+
+			if (_kbhit() && sRow > 6)
+			{
+				input = _getch();
+				//Determine what key was input by the player with a switch statement. Call the appropriate move function to move the shape as the player directed. 
+				switch (input)
+				{
+				case 's':
+					//If the user has entered the down arrow, move the shape moves down by 3 spaces total for each key press instead of traveling at the normal rate of 1 space per loop. Three spaces are used instead of just plopping the shape at the bottom
+					//of the bucket because the player is still allowed to change the shape orientation or space as it's being dropped. 
+					for (int i = 0; i < 2; i++)
+					{
+						moveOK = moveShape(moveOK, sRow, gameOver, input, rColumn, lColumn, tRow);
+						if (moveOK)
+						{
+							dropShape(sRow, lColumn, rColumn, tRow);
+							tRow++;
+							sRow++;
+						}
+						else
+						{
+							break;
+						}
+					}
+					break;
+				case 'd':
+					//If the user pressed the right arrow key, the shapeRight function is called to move the space right by one and display it to the game board. 
+					moveOK = moveShape(moveOK, sRow, gameOver, input, rColumn, lColumn, tRow);
+					if (moveOK)
+					{
+						shapeRight(sRow, lColumn, rColumn, tRow);
+						lColumn++;
+						rColumn++;
+					}
+					input = 's';
+					moveOK = true;
+
+					//Display the bucket and then sleep the program to slow down the process of running the loop. 
+					displayBucket(currentShape, color);
+					Sleep(500);
+					break;
+				case 'a':
+					//If the user pressed the left arrow key, the shapeLeft function is called to move the space left by one and display it to the game board. 
+					moveOK = moveShape(moveOK, sRow, gameOver, input, rColumn, lColumn, tRow);
+					if (moveOK)
+					{
+						shapeLeft(sRow, lColumn, rColumn, tRow);
+						lColumn--;
+						rColumn--;
+					}
+					input = 's';
+					moveOK = true;
+
+					//Display the bucket and then sleep the program to slow down the process of running the loop. 
+					displayBucket(currentShape, color);
+					Sleep(500);
+					break;
+				case 'w':
+					//Rotate the shape for the player. 
+					rotated = rotateShape(sRow, lColumn, rColumn, tRow, currentShape, rotated);
+
+					//Display the bucket and then sleep the program to slow down the process of running the loop. 
+					displayBucket(currentShape, color);
+					Sleep(500);
+					break;
+				default:
+					break;
+				}
+
+			}
+
+			//Make sure that the shape can drop down a space and drop it down.
+			moveOK = moveShape(moveOK, sRow, gameOver, input, rColumn, lColumn, tRow);
+			if (moveOK)
+			{
+				dropShape(sRow, lColumn, rColumn, tRow);
+				tRow++;
+				sRow++;
+			}
+
+			//Display the bucket and then sleep the program to slow down the process of running the loop. 
+			displayBucket(currentShape, color);
+			Sleep(500);
+
+			//Call the checkboard function to check the board for full lines and increase the players level if there are some. 
+			checkBoard(playerLevel, points, currentShape, color);
+
+			input = ' ';
+		} while (moveOK);
+
+		//Update the colorArray for the new shape's final position. If the colorArray hold a '0' value and the bucket array holds a '#' value, the color Array position is updated to hold the color value. 
+		for (int r = 0; r < ROWS; r++)
+		{
+			for (int c = 0; c < COLUMNS; c++)
+			{
+				if (bucketArray[r][c] == '#' && colorArray[r][c] == 7)
+				{
+					colorArray[r][c] = color;
+				}
+			}
+		}
+	}
+
+	//If gameOver is true, tell the player the game is over and change the start value to 3 to display the start menu again. 
+	cout << "\n-------------------------------------------------------------------------------\r\n";
+	cout << "|\t\t\t\tGame Over\t\t\t\t      |\r\n";
+	cout << "-------------------------------------------------------------------------------\r\n";
+	start = 3;
+	return start;
+}
+
+//Fill the game bucketArray in the initilizeBucket function. Use the shape that was chosen in the pickShape function to determine the shape that is initilized with the board.
+void dropNewShape(char currentShape, int &lColumn, int &rColumn, int &tRow)
+{
+	//Determine which shape was randomly chosen and update the first 4 rows of the game board with the appropriate [r][c] spaces in the bucketArray. 
+	switch (currentShape)
+	{
+	case 'J':
+		bucketArray[3][4] = '#';
+		bucketArray[3][5] = '#';
+		bucketArray[2][5] = '#';
+		bucketArray[1][5] = '#';
+		lColumn = 4;
+		rColumn = 5;
+		tRow = 1;
+		break;
+	case 'I':
+		bucketArray[0][4] = '#';
+		bucketArray[1][4] = '#';
+		bucketArray[2][4] = '#';
+		bucketArray[3][4] = '#';
+		lColumn = 4;
+		rColumn = 4;
+		tRow = 0;
+		break;
+	case 'O':
+		bucketArray[2][4] = '#';
+		bucketArray[2][5] = '#';
+		bucketArray[3][4] = '#';
+		bucketArray[3][5] = '#';
+		lColumn = 4;
+		rColumn = 5;
+		tRow = 2;
+		break;
+	case 'L':
+		bucketArray[1][4] = '#';
+		bucketArray[2][4] = '#';
+		bucketArray[3][4] = '#';
+		bucketArray[3][5] = '#';
+		lColumn = 4;
+		rColumn = 5;
+		tRow = 1;
+		break;
+	case 'S':
+		bucketArray[2][4] = '#';
+		bucketArray[2][5] = '#';
+		bucketArray[3][3] = '#';
+		bucketArray[3][4] = '#';
+		lColumn = 3;
+		rColumn = 5;
+		tRow = 2;
+		break;
+	case 'T':
+		bucketArray[2][4] = '#';
+		bucketArray[2][5] = '#';
+		bucketArray[2][6] = '#';
+		bucketArray[3][5] = '#';
+		lColumn = 4;
+		rColumn = 7;
+		tRow = 2;
+		break;
+	case 'Z':
+		bucketArray[3][6] = '#';
+		bucketArray[3][5] = '#';
+		bucketArray[2][5] = '#';
+		bucketArray[2][4] = '#';
+		lColumn = 3;
+		rColumn = 5;
+		tRow = 2;
+		break;
+	default:
+		//Fill first four rows with blanks if there is no shape returned. 
+		for (int r = 0; r < 3; r++)
+		{
+			for (int c = 0; c < COLUMNS; c++)
+			{
+				bucketArray[r][c] = ' ';
+			}
+		}
+		break;
+	}
+}
+
+void displayBucket(char currentShape, int color)
+{	
+	//Display the array to the screen.
+	cout << "\n\n";
+	for (int r = 0; r < ROWS; r++)
+	{
+		for (int c = 0; c < COLUMNS; c++)
+		{
+			if (c == 11)
+			{
+				setColor(7);
+				cout << bucketArray[r][c] << "\r\n";
+			}
+			else if (bucketArray[r][c] == '#')
+			{
+
+				if (colorArray[r][c] == 7)
+				{
+					setColor(color);
+					cout << bucketArray[r][c];
+				}
+				else
+				{
+					setColor(colorArray[r][c]);
+					cout << bucketArray[r][c];
+				}
+			}
+			else
+			{
+				setColor(7);
+				cout << bucketArray[r][c];
+			}
+		}
+	}
+
+}
+
+void setColor(int color)
+{
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
+}
+
+
+char pickShape()
+{
+	//Declare function variables. Int is the randomly chosen number for the shape. The shapeArray holds the shape characters for the shapes that are dropped in the game.
+	char shapeArray[7] = {'I', 'J', 'L', 'O', 'S', 'T', 'Z'};
+	int choice = 0;
+	char shape;
+
+	//Using a random number generator, an index number 0 - 6 is generated to determine which shape will be used next. Based on choice, determine the shape to return to the
+	//main function. 
+	choice = (rand() % 7);
+	shape = shapeArray[choice];
+
+	return shape;
+}
+
+//Setup the moveShapeDown function to verify if the shape can be moved down the game board. If the shape can not be moved down the game board because there is anoter shape below it, the game checks to see if the current row is row 4
+//(the top row of the bucketArray where the game board is) and if the shape is still technically above the board, gameOver = true and the game loop ends. 
+bool moveShape(bool moveOK, int sRow, bool& gameOver, char input, int rColumn, int lColumn, int tRow)
+{
+	//Use a switch statement to determine which move to check based on the user input. 
+	switch (input)
+	{
+	case 'd':
+		//Check to make sure the shape can move right one space by making sure the right-most edges are able to move. 
+		for (int r = sRow; r > tRow - 1; r--)
+		{
+			if (bucketArray[r][rColumn + 1] == '|' && bucketArray[r][rColumn] == '#')
+			{
+				moveOK = false;
+			}
+			else if (bucketArray[r][rColumn + 1] == '#' && bucketArray[r][rColumn] == '#')
+			{
+				moveOK = false;
+			}
+		}
+		break;
+	case 'a':
+		//Check to make sure the shape can move left one space by making sure the left-most edges are able to move. 
+		for (int r = sRow; r > tRow - 1; r--)
+		{
+			if (bucketArray[r][lColumn - 1] == '|' && bucketArray[r][lColumn] == '#')
+			{
+				moveOK = false;
+			}
+			else if (bucketArray[r][lColumn - 1] == '#' && bucketArray[r][lColumn] == '#')
+			{
+				moveOK = false;
+			}
+		}
+		break;
+	case 's':
+		for (int c = lColumn; c < rColumn + 1; c++)
+		{
+			if (bucketArray[sRow + 1][c] == '=' && bucketArray[sRow][c] == '#')
+			{
+				moveOK = false;
+			}
+			else if (bucketArray[sRow + 1][c] == '#' && bucketArray[sRow][c] == '#')
+			{
+				moveOK = false;
+				if (sRow == 3)
+				{
+					gameOver = true;
+				}
+			}
+		}
+		break;
+	default:
+		for (int c = lColumn; c < rColumn + 1; c++)
+		{
+			if (bucketArray[sRow + 1][c] == '=')
+			{
+				moveOK = false;
+			}
+			else if (bucketArray[sRow + 1][c] == '#' && bucketArray[sRow][c] == '#')
+			{
+				moveOK = false;
+				if (sRow == 3)
+				{
+					gameOver = true;
+				}
+			}
+		}
+		break;
+	}
+	
+	return moveOK;
+}
+
+//Setup the dropShape function to drop the shapes. 
+void dropShape(int sRow, int lColumn, int rColumn, int tRow)
+{
+	//Run a double for loop to move through the rows around the tetrimino shape. The bucket will updae around the current location of the tetrimino shape. If the space above the current location is a '#'
+	//value, then the '#' is moved down one space and the prior location of the '#' is updated to hold no value (' ').
+	for (int r = sRow + 1; r >= tRow; r--)
+	{
+		for (int c = lColumn; c <= rColumn + 1; c++)
+		{
+			if (bucketArray[r][c] == ' ' && bucketArray[r - 1][c] == '#')
+			{
+				bucketArray[r][c] = '#';
+				bucketArray[r - 1][c] = ' ';
+			}
+		}
+	}
+}
+
+
+//The shapeRight function moves the shape right on the game board
+void shapeRight(int sRow, int lColumn, int rColumn, int tRow)
+{
+	for (int r = sRow + 1; r > sRow - 4; r--)
+	{
+		for (int c = rColumn + 1; c > rColumn - 3; c--)
+		{
+			if (bucketArray[r][c] == ' ' && bucketArray[r][c - 1] == '#')
+			{
+				bucketArray[r][c] = '#';
+				bucketArray[r][c - 1] = ' ';
+			}
+		}
+	}
+}
+
+//The shapeLeft function moves the shape left on the game board. 
+void shapeLeft(int sRow, int lColumn, int rColumn, int tRow)
+{
+	for (int r = sRow + 1; r > sRow - 4; r--)
+	{
+		for (int c = lColumn - 1; c < lColumn + 3; c++)
+		{
+			if (bucketArray[r][c] == ' ' && bucketArray[r][c + 1] == '#')
+			{
+				bucketArray[r][c] = '#';
+				bucketArray[r][c + 1] = ' ';
+			}
+		}
+	}
+}
+
+int rotateShape(int &sRow, int &lColumn, int &rColumn, int &tRow, char currentShape, int rotated)
+{
+	//Wipe out the shape and replace the '#' with ' '.
+	for (int r = sRow; r > tRow - 1; r--)
+	{
+		for (int c = lColumn - 1; c < rColumn + 2; c++)
+		{
+			if (lColumn == 0 || rColumn == 11)
+			{
+				bucketArray[r][c] = '|';
+			}
+			else
+			{
+				bucketArray[r][c] = ' ';
+			}
+
+		}
+	}
+
+	//Using the currentShape and rotated number, rotate the piece on the game board. First check to see if the shape can rotate and then rotate the shape with respect to lColumn and sRow. Update rColumn, lColumns, tRow, and sRow as needed.
+	//Each time the shape rotates, update the rotated varibale to keep tabs on which rotation is in use. 
+	switch (currentShape)
+	{
+	case 'J':
+		switch (rotated)
+		{
+		case 1:
+			if (bucketArray[sRow][rColumn] != '|' && bucketArray[sRow][lColumn] != '|' && bucketArray[sRow][rColumn] != '#' && bucketArray[sRow][lColumn] != '#')
+			{
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow - 1][lColumn] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow][lColumn + 2] = '#';
+				rColumn = rColumn + 1;
+				tRow = tRow + 1;
+				rotated++;
+			}
+			break;
+		case 2:
+			bucketArray[sRow - 2][lColumn + 1] = '#';
+			bucketArray[sRow][lColumn + 1] = '#';
+			bucketArray[sRow - 1][lColumn + 1] = '#';
+			bucketArray[sRow - 2][lColumn + 2] = '#';
+			lColumn = lColumn + 1;
+			tRow = tRow - 1;
+			rotated++;
+			break;
+		case 3:
+			if (bucketArray[sRow][lColumn + 2] != '|' && bucketArray[sRow - 1][lColumn] != '|' && bucketArray[sRow][lColumn + 2] != '#' && bucketArray[sRow - 1][lColumn] != '#' && bucketArray[sRow - 1][lColumn + 2] != '|' && bucketArray[sRow - 1][lColumn + 2] != '#')
+			{
+				bucketArray[sRow + 1][lColumn] = '#';
+				bucketArray[sRow + 1][lColumn + 1] = '#';
+				bucketArray[sRow + 1][lColumn + 2] = '#';
+				bucketArray[sRow][lColumn + 2] = '#';
+				lColumn = lColumn - 1;
+				tRow = tRow - 1;
+				rotated++;
+			}
+			break;
+		case 4:
+			if (bucketArray[sRow][lColumn] != '|' && bucketArray[sRow][lColumn] != '#' && bucketArray[sRow][lColumn + 1] != '|' && bucketArray[sRow][lColumn + 1] != '#')
+			{
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow - 2][lColumn + 1] = '#';
+				rColumn = rColumn + 1;
+				tRow = tRow + 1;
+				rotated = 1;
+			}
+			break;
+		default:
+			break;
+		}
+		break;
+	case 'I':
+		switch (rotated)
+		{
+		case 1:
+			if (bucketArray[sRow][lColumn + 1] != '|' && bucketArray[sRow][lColumn + 1] != '#' && bucketArray[sRow][lColumn + 2] != '|' && bucketArray[sRow][lColumn + 2] != '#' && bucketArray[sRow][lColumn + 3] != '|' && bucketArray[sRow][lColumn + 3] != '#')
+			{
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow][lColumn + 2] = '#';
+				bucketArray[sRow][lColumn + 3] = '#';
+				rColumn = lColumn + 3;
+				tRow = sRow;
+				rotated++;
+			}
+			break;
+		case 2:
+			if (bucketArray[sRow + 1][lColumn] != '|' && bucketArray[sRow + 1][lColumn] != '#' && bucketArray[sRow + 2][lColumn] != '|' && bucketArray[sRow + 2][lColumn] != '#' && bucketArray[sRow + 3][lColumn] != '|' && bucketArray[sRow + 3][lColumn] != '#')
+			{
+				bucketArray[sRow + 3][lColumn] = '#';
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow + 1][lColumn] = '#';
+				bucketArray[sRow + 2][lColumn] = '#';
+				rColumn = lColumn;
+				tRow = sRow + 3;
+				rotated = 1;
+			}
+		default:
+			break;
+		}
+		break;
+	case 'L':
+		switch (rotated)
+		{
+		case 1:
+			if (bucketArray[sRow][lColumn + 2] != '|' && bucketArray[sRow][lColumn + 2] != '#' && bucketArray[sRow - 1][lColumn + 2] != '#' && bucketArray[sRow - 1][lColumn + 2] != '|')
+			{
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow][lColumn + 2] = '#';
+				bucketArray[sRow - 1][lColumn + 2] = '#';
+				rColumn = rColumn + 1;
+				tRow = tRow + 1;
+				rotated++;
+			}
+			break;
+		case 2:
+			bucketArray[sRow][lColumn + 2] = '#';
+			bucketArray[sRow - 1][lColumn + 2] = '#';
+			bucketArray[sRow - 2][lColumn + 2] = '#';
+			bucketArray[sRow - 2][lColumn + 1] = '#';
+			lColumn = lColumn + 1;
+			tRow = tRow - 1;
+			rotated++;
+			break;
+		case 3:
+			if (bucketArray[sRow][lColumn] != '|' && bucketArray[sRow - 1][lColumn] != '|' && bucketArray[sRow][lColumn] != '#' && bucketArray[sRow - 1][lColumn] != '#')
+			{
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow - 1][lColumn] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn + 2] = '#';
+				lColumn = lColumn - 1;
+				tRow = tRow + 1;
+				rotated++;
+			}
+			break;
+		case 4:
+			if (bucketArray[sRow][lColumn + 1] != '|' && bucketArray[sRow][lColumn + 1] != '#' && bucketArray[sRow][lColumn + 2] != '|' && bucketArray[sRow][lColumn + 2] != '#')
+			{
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow][lColumn + 2] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				bucketArray[sRow - 2][lColumn + 1] = '#';
+				lColumn = lColumn + 1;
+				tRow = tRow - 1;
+				rotated = 1;
+			}
+			break;
+		default:
+			break;
+		}
+		break;
+	case 'S':
+		switch (rotated)
+		{
+		case 1:
+			if (bucketArray[sRow - 2][lColumn] != '#' && bucketArray[sRow - 2][lColumn] != '|' && bucketArray[sRow - 1][lColumn] != '#' && bucketArray[sRow - 1][lColumn] != '|')
+			{
+				bucketArray[sRow - 2][lColumn] = '#';
+				bucketArray[sRow - 1][lColumn] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				rColumn = lColumn + 1;
+				tRow = sRow - 2;
+				rotated++;
+			}
+
+			break;
+		case 2:
+			if (bucketArray[sRow][lColumn] != '#' && bucketArray[sRow][lColumn] != '|' && bucketArray[sRow][lColumn + 1] != '#' && bucketArray[sRow][lColumn + 1] != '|' && bucketArray[sRow - 1][lColumn + 2] != '#' && bucketArray[sRow - 1][lColumn + 2] != '|')
+			{
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn + 2] = '#';
+				rColumn = lColumn + 2;
+				tRow = sRow - 1;
+				rotated = 1;
+			}
+			break;
+		default:
+			break;
+		}
+		break;
+	case 'T':
+		switch (rotated)
+		{
+		case 1:
+			if (bucketArray[sRow -2][lColumn + 1] != '#' && bucketArray[sRow - 2][lColumn + 1] != '|')
+			{
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn +1] = '#';
+				bucketArray[sRow - 1][lColumn + 2] = '#';
+				bucketArray[sRow - 2][lColumn + 1] = '#';
+				lColumn = lColumn - 1;
+				tRow = tRow - 1;
+				rotated++;
+			}
+			break;
+		case 2:
+			if (bucketArray[sRow - 1][lColumn - 1] != '#' && bucketArray[sRow - 1][lColumn - 1] != '|')
+			{
+
+			}
+			bucketArray[sRow - 1][lColumn - 1] = '#';
+			bucketArray[sRow - 1][lColumn] = '#';
+			bucketArray[sRow - 1][lColumn + 1] = '#';
+			bucketArray[sRow - 2][lColumn] = '#';
+			lColumn = lColumn - 1;
+			sRow = sRow - 1;
+			rotated++;
+			break;
+		case 3:
+			if (bucketArray[sRow + 1][lColumn + 1] != '#' && bucketArray[sRow + 1][lColumn + 1] != '|')
+			{
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				bucketArray[sRow - 2][lColumn + 1] = '#';
+				rColumn = rColumn - 1;
+				tRow = tRow - 1;
+				rotated++;
+			}
+			break;
+		case 4:
+			if (bucketArray[sRow - 1][lColumn + 2] != '#' && bucketArray[sRow - 1][lColumn + 2] != '|')
+			{
+				bucketArray[sRow][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn + 2] = '#';
+				rColumn = rColumn + 1;
+				tRow = tRow + 1;
+				rotated = 1;
+			}
+			break;
+		default:
+			break;
+		}
+		break;
+	case 'Z':
+		switch (rotated)
+		{
+		case 1:
+			if (bucketArray[sRow - 2][lColumn + 2] != '#' && bucketArray[sRow - 2][lColumn + 2] != '|')
+			{
+				bucketArray[sRow - 2][lColumn + 2] = '#';
+				bucketArray[sRow - 1][lColumn + 1] = '#';
+				bucketArray[sRow - 1][lColumn + 2] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				lColumn = lColumn + 1;
+				tRow = tRow - 1;
+				rotated++;
+			}
+			break;
+		case 2:
+			if (bucketArray[sRow - 1][lColumn - 1] != '#' && bucketArray[sRow - 1][lColumn - 1] != '|')
+			{
+				bucketArray[sRow - 1][lColumn - 1] = '#';
+				bucketArray[sRow - 1][lColumn] = '#';
+				bucketArray[sRow][lColumn] = '#';
+				bucketArray[sRow][lColumn + 1] = '#';
+				lColumn = lColumn - 1;
+				tRow = tRow + 1;
+				rotated = 1;
+			}
+			break;
+		default:
+			break;
+		};
+		break;
+	default:
+		//Fill first four rows with blanks if there is no shape returned. 
+		for (int r = 0; r < 3; r++)
+		{
+			for (int c = 0; c < COLUMNS; c++)
+			{
+				bucketArray[r][c] = ' ';
+			}
+		}
+		break;
+	}
+
+	//Use a switch statement to determine which shape is in play and how the current shape will be rotated. 
+	return rotated;
+}
+
+//The checkboard function moves through the game board, checking to see if each row 
+void checkBoard(int& playerLevel, int& points, char currentShape, int color)
+{
+	//Declare the linesCleared variable to hold the number of lines cleared while the function runs. pound keeps track of the number of '#' shapes in a row and is reset after each row is checked. cRow holds the current row. 
+	//score holds the running score for the program. 
+	int linesCleared = 0, pound, cRow = ROWS - 2, score = 0;
+
+	//Move backwards through the game board. Begining at the bottom, check each row to see if all spaces horizontally are filled. If they are, replace the space with a ' ' and drop all '#' spaces above the current row down by one. If a line is cleared, 
+	//the r value decreases by one so that when the loop ends, the same row will be checked again to see if the new dropped row contains 10 '#' spaces. If lineCleared increases, display the game board.
+	for (int r = ROWS - 2; r > 3; r--)
+	{
+		pound = 0;
+		for (int c = 1; c < COLUMNS - 1; c++)
+		{
+			if (bucketArray[r][c] == '#')
+			{
+				pound++;
+			}
+		}
+		if (pound == 10)
+		{
+			for (int c = 1; c < COLUMNS - 1; c++)
+			{
+				bucketArray[r][c] = ' ';
+			}
+			linesCleared++;
+			for (int rW = cRow - 1; rW > 3; rW--)
+			{
+				for (int cL = 0; cL < COLUMNS - 1; cL++)
+				{
+					if (bucketArray[rW - 1][cL] == '#' && bucketArray[rW][cL] == ' ')
+					{
+						bucketArray[rW - 1][cL] = ' ';
+						bucketArray[rW][cL] = '#';
+					}
+				}
+			}
+			displayBucket(currentShape, color);
+			r = ROWS -2;
+			cRow = ROWS - 2;
+		}
+	}
+
+	//If there was 1 or more rows filled by tetriminos, award points to to player based on the clearLine number. If there weren't any rows filled and the player did not gain points, do nothing. 
+	if (linesCleared == 1)
+	{
+		score = 100 * playerLevel;
+	}
+	else if (linesCleared == 2)
+	{
+		score = 300 * playerLevel;
+	}
+	else if (linesCleared == 3)
+	{
+		score = 500 * playerLevel;
+	}
+	else if (linesCleared >= 4)
+	{
+		score = 800 * playerLevel;
+	}
+	else
+	{
+		//Nothing happens if linesCleared = 0.
+	}
+
+	//Add the new score to the player's points. 
+	points = points + score;
+
+	//Declare bool to determine if the player has leveled.
+	bool leveled = false;
+
+	//Check to see if the player has scored an additional 10000 points and increase their level if they have. leveled will also be updated to true if the player
+	//has leveled. In addition, points is updated so that 10000 * playerlevel is removed from the points value. 
+	if (points >= 10000 * playerLevel)
+	{
+		playerLevel++;
+		leveled = true;
+		if (points > 10000 * playerLevel)
+		{
+			points = points - (10000 * playerLevel);
+		}
+		else
+		{
+			points = 0;
+		}
+	}
+
+	//if the points have increased for the player, display the points screen so the player knows their level and current points. Congratulate the player if their level has increased
+	if (score > 0 )
+	{
+		cout << "\n-------------------------------------------------------------------------------\r\n";
+		cout << "|\t\t\t\tScore\t\t\t\t\t      |\r\n";
+		cout << "-------------------------------------------------------------------------------\r\n";
+		if (leveled == true)
+		{
+			cout << "Congratulations! You leveled up!\r\n";
+		}
+		cout << "Player Level:  " << playerLevel << "\r\n";
+		cout << "Player Points: " << points << "\r\n";
+		cout << "\n-------------------------------------------------------------------------------\r\n";
+		cout << "|\t\t\t\t\t\t\t\t\t      |\r\n";
+		cout << "-------------------------------------------------------------------------------\r\n";
+		system("pause");
+	}
+}
